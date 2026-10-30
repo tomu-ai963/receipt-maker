@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>領収書メーカー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Shippori+Mincho:wght@500;700&display=swap">
+<style>
+/* Layout: 左に入力フォーム、右にA5横の領収書プレビュー。印刷時はプレビューのみ（控え付きならA4縦に2枚） */
+:root{
+  --bg:#eef0ec; --panel:#ffffff; --fg:#1f2421; --muted:#5f6b63; --line:#cfd6d0;
+  --accent:#9e2a2b; --accent-fg:#ffffff; --field:#f7f8f6;
+  --ui:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",sans-serif;
+  --paper:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#171a18; --panel:#212622; --fg:#e7ebe8; --muted:#9aa59e; --line:#3a423c;
+  --accent:#d36a5f; --accent-fg:#1a0d0c; --field:#1b1f1c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#171a18; --panel:#212622; --fg:#e7ebe8; --muted:#9aa59e; --line:#3a423c;
+  --accent:#d36a5f; --accent-fg:#1a0d0c; --field:#1b1f1c; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--ui);font-size:15px;line-height:1.6}
+.app{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:24px;
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto}
+@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}}
+header.top{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px}
+header.top h1{font-family:var(--paper);font-size:1.6rem;margin:0;letter-spacing:.12em}
+header.top p{margin:0;color:var(--muted);font-size:.85rem}
+
+form{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:18px;min-width:0}
+fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+legend{font-size:.75rem;letter-spacing:.14em;color:var(--muted);margin-bottom:6px;font-weight:700}
+label{display:flex;flex-direction:column;gap:4px;font-size:.85rem}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row.name{grid-template-columns:1fr 92px}
+input,select{font:inherit;color:var(--fg);background:var(--field);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input[type=number]{font-variant-numeric:tabular-nums;text-align:right}
+.check{flex-direction:row;align-items:center;gap:8px}
+.check input{width:auto}
+.hint{font-size:.78rem;color:var(--muted);margin:0}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+button{font:inherit;border-radius:6px;padding:10px 16px;cursor:pointer;border:1px solid var(--line);background:var(--field);color:var(--fg)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700;flex:1}
+.total{display:flex;justify-content:space-between;align-items:baseline;padding:10px 12px;background:var(--field);border-radius:6px;font-variant-numeric:tabular-nums}
+.total strong{font-size:1.2rem}
+
+.preview{min-width:0;display:flex;flex-direction:column;gap:12px}
+.stage{overflow:hidden;border-radius:4px}
+.sheet{transform-origin:top left}
+
+/* ===== 領収書本体（紙なので常に白地） ===== */
+.receipt{width:210mm;height:148mm;padding:11mm 13mm;background:#fff;color:#1a1a1a;font-family:var(--paper);
+  position:relative;display:flex;flex-direction:column;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.receipt + .receipt{margin-top:16px}
+.r-head{display:flex;justify-content:space-between;align-items:flex-start}
+.r-title{font-size:26pt;letter-spacing:.6em;margin:0 0 0 .6em;font-weight:700;border-bottom:3px double #1a1a1a;padding:0 .2em 2px 0}
+.r-tag{font-size:9pt;border:1px solid #1a1a1a;padding:1px 8px;margin-left:10px;vertical-align:middle;letter-spacing:.2em}
+.r-meta{text-align:right;font-size:10pt;line-height:1.7;font-variant-numeric:tabular-nums}
+.r-to{margin-top:7mm;font-size:16pt;border-bottom:1px solid #1a1a1a;width:58%;padding:0 2mm 1mm;display:flex;justify-content:space-between;gap:8px}
+.r-to span:first-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.r-amount{margin:6mm auto 0;width:80%;border:2px solid #1a1a1a;display:flex;align-items:center;padding:3mm 6mm;gap:6mm;background:#f6f4ef}
+.r-amount .lbl{font-size:12pt;letter-spacing:.4em}
+.r-amount .num{flex:1;text-align:center;font-size:24pt;font-weight:700;letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.r-daiji{text-align:center;font-size:10pt;margin-top:1.5mm;letter-spacing:.1em}
+.r-note{margin:4mm auto 0;width:80%;font-size:11.5pt;display:flex;gap:4mm;border-bottom:1px dotted #1a1a1a;padding-bottom:1mm}
+.r-recv{width:80%;margin:2mm auto 0;font-size:10pt}
+.r-foot{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;gap:6mm}
+.r-left{display:flex;align-items:flex-end;gap:5mm}
+.r-tax{border-collapse:collapse;font-size:8.5pt;font-variant-numeric:tabular-nums}
+.r-tax th,.r-tax td{border:1px solid #1a1a1a;padding:.8mm 2.5mm;font-weight:500}
+.r-tax td{text-align:right}
+.r-tax caption{text-align:left;font-size:8.5pt;padding-bottom:1mm}
+.r-stamp{width:22mm;height:26mm;border:1px dashed #1a1a1a;display:flex;align-items:center;justify-content:center;font-size:8pt;text-align:center;line-height:1.4}
+.r-issuer{font-size:9.5pt;line-height:1.6;position:relative;padding-right:20mm;min-width:72mm}
+.r-issuer .nm{font-size:12.5pt;font-weight:700}
+.r-seal{position:absolute;right:0;top:2mm;width:15mm;height:15mm;border:1px solid #999;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#999;font-size:8pt}
+
+@media print{
+  @page{size:A4 portrait;margin:0}
+  body{background:#fff}
+  .app{display:block;padding:0;max-width:none}
+  header.top,form,.preview>.hint{display:none!important}
+  .stage{overflow:visible;height:auto!important;border-radius:0}
+  .sheet{transform:none!important}
+  .receipt{box-shadow:none;margin:0!important;page-break-inside:avoid}
+  .receipt + .receipt{border-top:1px dashed #888}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>領収書メーカー</h1>
+    <p>入力するとすぐ右側の領収書に反映されます。発行者情報はこのブラウザに保存されます。</p>
+  </header>
+
+  <form id="f" autocomplete="off">
+    <fieldset>
+      <legend>宛名・日付</legend>
+      <div class="row name">
+        <label>宛名<input id="to" value="山田 太郎"></label>
+        <label>敬称<select id="hon"><option>様</option><option>御中</option><option value="">なし</option></select></label>
+      </div>
+      <div class="row">
+        <label>発行日<input id="date" type="date"></label>
+        <label>No.<input id="no" value="0001"></label>
+      </div>
+      <label class="check"><input id="wareki" type="checkbox">和暦で表示（令和）</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>金額（税込）</legend>
+      <div class="row">
+        <label>10%対象<input id="a10" type="number" min="0" step="1" value="33000"></label>
+        <label>8%対象<input id="a8" type="number" min="0" step="1" value="0"></label>
+      </div>
+      <div class="total"><span>合計</span><strong id="sum">￥0</strong></div>
+      <label class="check"><input id="daiji" type="checkbox" checked>大字（壱・弐・参…）を併記</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>但し書き・支払方法</legend>
+      <label>但し<input id="note" value="防音室 施工代"></label>
+      <p class="hint">「として」は自動で付きます。</p>
+      <label>支払方法<select id="pay"><option>現金</option><option>銀行振込</option><option>クレジットカード</option><option>その他</option></select></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>発行者（保存されます）</legend>
+      <label>名前・屋号<input id="iname" value="とむ工房"></label>
+      <label>住所<input id="iaddr" value="〒000-0000 ○○県○○市○○町1-2-3"></label>
+      <div class="row">
+        <label>電話<input id="itel" value="000-000-0000"></label>
+        <label>登録番号<input id="ireg" placeholder="T1234567890123"></label>
+      </div>
+      <p class="hint">登録番号はインボイス登録している場合のみ。空欄なら表示しません。</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>印刷</legend>
+      <label class="check"><input id="copy" type="checkbox" checked>控えも一緒に印刷（A4縦に2枚）</label>
+      <div class="actions">
+        <button type="button" class="primary" id="print">印刷する</button>
+        <button type="button" id="next">次の番号へ</button>
+      </div>
+      <p class="hint">印刷後は番号が自動で1つ進みます。</p>
+    </fieldset>
+  </form>
+
+  <section class="preview">
+    <div class="stage" id="stage"><div class="sheet" id="sheet"></div></div>
+    <p class="hint" id="stampHint"></p>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const yen = n => '￥' + n.toLocaleString('ja-JP');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function daiji(n){
+  if(!n) return '零';
+  const d=['','壱','弐','参','四','伍','六','七','八','九'], small=['','拾','百','千'], big=['','萬','億','兆'];
+  let s='', i=0;
+  while(n>0){
+    let chunk=n%10000, c='', j=0;
+    while(chunk>0){ const dg=chunk%10; if(dg) c=d[dg]+small[j]+c; chunk=Math.floor(chunk/10); j++; }
+    if(c) s=c+big[i]+s;
+    n=Math.floor(n/10000); i++;
+  }
+  return s;
+}
+function fmtDate(v, wareki){
+  if(!v) return '';
+  const [y,m,d]=v.split('-').map(Number);
+  if(wareki){ const r=y-2018; return `令和${r===1?'元':r}年${m}月${d}日`; }
+  return `${y}年${m}月${d}日`;
+}
+const toInt = v => Math.max(0, Math.floor(Number(v)||0));
+
+function receiptHTML(kind, v){
+  const tag = kind==='copy' ? '<span class="r-tag">控</span>' : '';
+  const taxRows = [];
+  if(v.a10) taxRows.push(`<tr><th>10%対象</th><td>${yen(v.a10)}</td><th>消費税</th><td>${yen(v.t10)}</td></tr>`);
+  if(v.a8)  taxRows.push(`<tr><th>8%対象※</th><td>${yen(v.a8)}</td><th>消費税</th><td>${yen(v.t8)}</td></tr>`);
+  const taxTable = taxRows.length ? `<table class="r-tax"><caption>内訳（税込）${v.a8?'　※軽減税率対象':''}</caption>${taxRows.join('')}</table>` : '';
+  const stamp = (v.needStamp && kind==='main') ? '<div class="r-stamp">収入<br>印紙</div>' : '';
+  return `<div class="receipt">
+    <div class="r-head">
+      <div><span class="r-title">領収書</span>${tag}</div>
+      <div class="r-meta">No. ${esc(v.no)}<br>${esc(v.date)}</div>
+    </div>
+    <div class="r-to"><span>${esc(v.to)||'&nbsp;'}</span><span>${esc(v.hon)}</span></div>
+    <div class="r-amount"><span class="lbl">金額</span><span class="num">${yen(v.total)}－</span></div>
+    ${v.daiji ? `<div class="r-daiji">金 ${daiji(v.total)} 円也</div>`:''}
+    <div class="r-note"><span>但し</span><span>${esc(v.note)}${v.note?' として':''}</span></div>
+    <div class="r-recv">上記正に領収いたしました。　（${esc(v.pay)}）</div>
+    <div class="r-foot">
+      <div class="r-left">${stamp}${taxTable}</div>
+      <div class="r-issuer">
+        <div class="nm">${esc(v.iname)}</div>
+        <div>${esc(v.iaddr)}</div>
+        ${v.itel?`<div>TEL ${esc(v.itel)}</div>`:''}
+        ${v.ireg?`<div>登録番号 ${esc(v.ireg)}</div>`:''}
+        <div class="r-seal">印</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function read(){
+  const a10=toInt($('a10').value), a8=toInt($('a8').value);
+  const t10=Math.floor(a10*10/110), t8=Math.floor(a8*8/108);
+  const total=a10+a8, net=total-t10-t8;
+  const card=$('pay').value==='クレジットカード';
+  return {
+    to:$('to').value, hon:$('hon').value, no:$('no').value,
+    date:fmtDate($('date').value,$('wareki').checked),
+    a10,a8,t10,t8,total,net,daiji:$('daiji').checked,
+    note:$('note').value, pay:$('pay').value,
+    iname:$('iname').value, iaddr:$('iaddr').value, itel:$('itel').value, ireg:$('ireg').value,
+    needStamp: net>=50000 && !card, card, copy:$('copy').checked
+  };
+}
+
+function fit(){
+  const stage=$('stage'), sheet=$('sheet');
+  const w=sheet.scrollWidth; if(!w) return;
+  const s=Math.min(1, stage.clientWidth/w);
+  sheet.style.transform=`scale(${s})`;
+  stage.style.height=(sheet.scrollHeight*s)+'px';
+}
+
+function render(){
+  const v=read();
+  $('sum').textContent=yen(v.total);
+  $('sheet').innerHTML = receiptHTML('main',v) + (v.copy?receiptHTML('copy',v):'');
+  $('stampHint').textContent = v.net>=50000
+    ? (v.card ? 'クレジットカード払いの領収書は収入印紙が不要です。'
+              : `税抜 ${yen(v.net)} のため収入印紙が必要です（左下の欄に貼付・消印）。`)
+    : '税抜5万円未満のため収入印紙は不要です。';
+  fit(); save();
+}
+
+const KEY='receipt-maker-v1', keep=['iname','iaddr','itel','ireg','no','copy','wareki','daiji'];
+function save(){
+  try{ const o={}; keep.forEach(k=>{const el=$(k); o[k]=el.type==='checkbox'?el.checked:el.value;}); localStorage.setItem(KEY,JSON.stringify(o)); }catch(e){}
+}
+function load(){
+  try{ const o=JSON.parse(localStorage.getItem(KEY)||'null'); if(!o) return;
+    keep.forEach(k=>{ if(k in o){const el=$(k); el.type==='checkbox'?el.checked=o[k]:el.value=o[k];} }); }catch(e){}
+}
+function bump(){
+  const v=$('no').value, m=v.match(/^(.*?)(\d+)$/);
+  $('no').value = m ? m[1]+String(Number(m[2])+1).padStart(m[2].length,'0') : v;
+  render();
+}
+
+const t=new Date(); $('date').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+load();
+$('f').addEventListener('input',render);
+$('f').addEventListener('change',render);
+$('f').addEventListener('submit',e=>e.preventDefault());
+$('print').addEventListener('click',()=>window.print());
+$('next').addEventListener('click',bump);
+window.addEventListener('afterprint',bump);
+window.addEventListener('resize',fit);
+document.fonts && document.fonts.ready.then(fit);
+render();
+</script>
+</body>
+</html>
