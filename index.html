@@ -103,7 +103,7 @@ button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(
     <fieldset>
       <legend>宛名・日付</legend>
       <div class="row name">
-        <label>宛名<input id="to" value="山田 太郎"></label>
+        <label>宛名<input id="to"></label>
         <label>敬称<select id="hon"><option>様</option><option>御中</option><option value="">なし</option></select></label>
       </div>
       <div class="row">
@@ -116,7 +116,7 @@ button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(
     <fieldset>
       <legend>金額（税込）</legend>
       <div class="row">
-        <label>10%対象<input id="a10" type="number" min="0" step="1" value="33000"></label>
+        <label>10%対象<input id="a10" type="number" min="0" step="1"></label>
         <label>8%対象<input id="a8" type="number" min="0" step="1" value="0"></label>
       </div>
       <div class="total"><span>合計</span><strong id="sum">￥0</strong></div>
@@ -125,18 +125,18 @@ button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(
 
     <fieldset>
       <legend>但し書き・支払方法</legend>
-      <label>但し<input id="note" value="防音室 施工代"></label>
+      <label>但し<input id="note"></label>
       <p class="hint">「として」は自動で付きます。</p>
       <label>支払方法<select id="pay"><option>現金</option><option>銀行振込</option><option>クレジットカード</option><option>その他</option></select></label>
     </fieldset>
 
     <fieldset>
       <legend>発行者（保存されます）</legend>
-      <label>名前・屋号<input id="iname" value="とむ工房"></label>
-      <label>住所<input id="iaddr" value="〒000-0000 ○○県○○市○○町1-2-3"></label>
+      <label>名前・屋号<input id="iname"></label>
+      <label>住所<input id="iaddr"></label>
       <div class="row">
-        <label>電話<input id="itel" value="000-000-0000"></label>
-        <label>登録番号<input id="ireg" placeholder="T1234567890123"></label>
+        <label>電話<input id="itel"></label>
+        <label>登録番号<input id="ireg"></label>
       </div>
       <p class="hint">登録番号はインボイス登録している場合のみ。空欄なら表示しません。</p>
     </fieldset>
