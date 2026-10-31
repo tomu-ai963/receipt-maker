@@ -96,7 +96,7 @@ button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(
 <div class="app">
   <header class="top">
     <h1>領収書メーカー</h1>
-    <p>入力するとすぐ右側の領収書に反映されます。発行者情報はこのブラウザに保存されます。</p>
+    <p>入力するとすぐプレビューの領収書に反映されます。発行者情報はこのブラウザに保存されます。</p>
   </header>
 
   <form id="f" autocomplete="off">
@@ -110,14 +110,14 @@ button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(
         <label>発行日<input id="date" type="date"></label>
         <label>No.<input id="no" value="0001"></label>
       </div>
-      <label class="check"><input id="wareki" type="checkbox">和暦で表示（令和）</label>
+      <label class="check"><input id="wareki" type="checkbox">和暦で表示</label>
     </fieldset>
 
     <fieldset>
       <legend>金額（税込）</legend>
       <div class="row">
         <label>10%対象<input id="a10" type="number" min="0" step="1"></label>
-        <label>8%対象<input id="a8" type="number" min="0" step="1" value="0"></label>
+        <label>8%対象<input id="a8" type="number" min="0" step="1"></label>
       </div>
       <div class="total"><span>合計</span><strong id="sum">￥0</strong></div>
       <label class="check"><input id="daiji" type="checkbox" checked>大字（壱・弐・参…）を併記</label>
@@ -148,7 +148,7 @@ button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(
         <button type="button" class="primary" id="print">印刷する</button>
         <button type="button" id="next">次の番号へ</button>
       </div>
-      <p class="hint">印刷後は番号が自動で1つ進みます。</p>
+      <p class="hint">印刷画面を閉じると、番号を1つ進めるか確認します。</p>
     </fieldset>
   </form>
 
@@ -178,10 +178,18 @@ function daiji(n){
 function fmtDate(v, wareki){
   if(!v) return '';
   const [y,m,d]=v.split('-').map(Number);
-  if(wareki){ const r=y-2018; return `令和${r===1?'元':r}年${m}月${d}日`; }
+  if(wareki){
+    // 改元日: 令和 2019-05-01 / 平成 1989-01-08 / 昭和 1926-12-25
+    const k=y*10000+m*100+d;
+    const [era,base]= k>=20190501?['令和',2018]: k>=19890108?['平成',1988]: ['昭和',1925];
+    const r=y-base; return `${era}${r===1?'元':r}年${m}月${d}日`;
+  }
   return `${y}年${m}月${d}日`;
 }
 const toInt = v => Math.max(0, Math.floor(Number(v)||0));
+// 印紙税額（第17号の1文書・売上代金の受取書）。税抜金額で判定する
+const STAMP=[[1e6,200],[2e6,400],[3e6,600],[5e6,1000],[1e7,2000],[2e7,4000],[3e7,6000],[5e7,1e4],[1e8,2e4],[2e8,4e4],[3e8,6e4],[5e8,1e5],[1e9,15e4]];
+const stampTax = net => net<50000 ? 0 : (STAMP.find(([max])=>net<=max)||[0,2e5])[1];
 
 function receiptHTML(kind, v){
   const tag = kind==='copy' ? '<span class="r-tag">控</span>' : '';
@@ -242,7 +250,7 @@ function render(){
   $('sheet').innerHTML = receiptHTML('main',v) + (v.copy?receiptHTML('copy',v):'');
   $('stampHint').textContent = v.net>=50000
     ? (v.card ? 'クレジットカード払いの領収書は収入印紙が不要です。'
-              : `税抜 ${yen(v.net)} のため収入印紙が必要です（左下の欄に貼付・消印）。`)
+              : `税抜 ${yen(v.net)} のため ${yen(stampTax(v.net))} の収入印紙が必要です（左下の欄に貼付・消印）。`)
     : '税抜5万円未満のため収入印紙は不要です。';
   fit(); save();
 }
@@ -268,7 +276,8 @@ $('f').addEventListener('change',render);
 $('f').addEventListener('submit',e=>e.preventDefault());
 $('print').addEventListener('click',()=>window.print());
 $('next').addEventListener('click',bump);
-window.addEventListener('afterprint',bump);
+// afterprint は印刷をキャンセルしても発火するため、進めるかを確認する
+window.addEventListener('afterprint',()=>{ if(confirm(`No. ${$('no').value} を印刷できましたか？\n「OK」で番号を次に進めます。印刷をやめた場合は「キャンセル」。`)) bump(); });
 window.addEventListener('resize',fit);
 document.fonts && document.fonts.ready.then(fit);
 render();
