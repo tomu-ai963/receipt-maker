@@ -138,7 +138,7 @@ button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(
         <label>電話<input id="itel"></label>
         <label>登録番号<input id="ireg"></label>
       </div>
-      <p class="hint">登録番号はインボイス登録している場合のみ。空欄なら表示しません。</p>
+      <p class="hint">登録番号はインボイス登録している場合のみ。空欄なら登録番号と消費税額は表示せず、税込金額だけを載せます（収入印紙も税込金額で判定）。</p>
     </fieldset>
 
     <fieldset>
@@ -187,15 +187,17 @@ function fmtDate(v, wareki){
   return `${y}年${m}月${d}日`;
 }
 const toInt = v => Math.max(0, Math.floor(Number(v)||0));
-// 印紙税額（第17号の1文書・売上代金の受取書）。税抜金額で判定する
+// 印紙税額（第17号の1文書・売上代金の受取書）。消費税額の記載があれば税抜、なければ税込で判定する
 const STAMP=[[1e6,200],[2e6,400],[3e6,600],[5e6,1000],[1e7,2000],[2e7,4000],[3e7,6000],[5e7,1e4],[1e8,2e4],[2e8,4e4],[3e8,6e4],[5e8,1e5],[1e9,15e4]];
 const stampTax = net => net<50000 ? 0 : (STAMP.find(([max])=>net<=max)||[0,2e5])[1];
 
 function receiptHTML(kind, v){
   const tag = kind==='copy' ? '<span class="r-tag">控</span>' : '';
   const taxRows = [];
-  if(v.a10) taxRows.push(`<tr><th>10%対象</th><td>${yen(v.a10)}</td><th>消費税</th><td>${yen(v.t10)}</td></tr>`);
-  if(v.a8)  taxRows.push(`<tr><th>8%対象※</th><td>${yen(v.a8)}</td><th>消費税</th><td>${yen(v.t8)}</td></tr>`);
+  // 登録番号がない（インボイス未登録）ときは消費税額を出さず、税込の対象額だけ表示する
+  const taxCell = t => v.invoice ? `<th>消費税</th><td>${yen(t)}</td>` : '';
+  if(v.a10) taxRows.push(`<tr><th>10%対象</th><td>${yen(v.a10)}</td>${taxCell(v.t10)}</tr>`);
+  if(v.a8)  taxRows.push(`<tr><th>8%対象※</th><td>${yen(v.a8)}</td>${taxCell(v.t8)}</tr>`);
   const taxTable = taxRows.length ? `<table class="r-tax"><caption>内訳（税込）${v.a8?'　※軽減税率対象':''}</caption>${taxRows.join('')}</table>` : '';
   const stamp = (v.needStamp && kind==='main') ? '<div class="r-stamp">収入<br>印紙</div>' : '';
   return `<div class="receipt">
@@ -226,13 +228,16 @@ function read(){
   const t10=Math.floor(a10*10/110), t8=Math.floor(a8*8/108);
   const total=a10+a8, net=total-t10-t8;
   const card=$('pay').value==='クレジットカード';
+  const ireg=$('ireg').value.trim(), invoice=!!ireg;
+  // 印紙税は消費税額が領収書に記載されている場合のみ税抜で判定、記載がなければ税込で判定
+  const stampBase = invoice ? net : total;
   return {
     to:$('to').value, hon:$('hon').value, no:$('no').value,
     date:fmtDate($('date').value,$('wareki').checked),
-    a10,a8,t10,t8,total,net,daiji:$('daiji').checked,
+    a10,a8,t10,t8,total,net,stampBase,invoice,daiji:$('daiji').checked,
     note:$('note').value, pay:$('pay').value,
-    iname:$('iname').value, iaddr:$('iaddr').value, itel:$('itel').value, ireg:$('ireg').value,
-    needStamp: net>=50000 && !card, card, copy:$('copy').checked
+    iname:$('iname').value, iaddr:$('iaddr').value, itel:$('itel').value, ireg,
+    needStamp: stampBase>=50000 && !card, card, copy:$('copy').checked
   };
 }
 
@@ -248,10 +253,11 @@ function render(){
   const v=read();
   $('sum').textContent=yen(v.total);
   $('sheet').innerHTML = receiptHTML('main',v) + (v.copy?receiptHTML('copy',v):'');
-  $('stampHint').textContent = v.net>=50000
+  const basis = v.invoice ? '税抜' : '税込';
+  $('stampHint').textContent = v.stampBase>=50000
     ? (v.card ? 'クレジットカード払いの領収書は収入印紙が不要です。'
-              : `税抜 ${yen(v.net)} のため ${yen(stampTax(v.net))} の収入印紙が必要です（左下の欄に貼付・消印）。`)
-    : '税抜5万円未満のため収入印紙は不要です。';
+              : `${basis} ${yen(v.stampBase)} のため ${yen(stampTax(v.stampBase))} の収入印紙が必要です（左下の欄に貼付・消印）。`)
+    : `${basis}5万円未満のため収入印紙は不要です。`;
   fit(); save();
 }
 
